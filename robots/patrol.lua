@@ -1,9 +1,12 @@
 local robot = require("robot")
 local computer = require("computer")
+local component = require("component")
+local navigation = component.navigation
 
 local config = {
+  DEBUG = true,
   RECHARGE = true,
-  CRITICAL_POWER_LEVEL = 0.2,
+  CRITICAL_POWER_LEVEL = 0.95,
   MUTE = false
 }
 
@@ -27,11 +30,6 @@ end
 
 local function get_power_level()
   assert(computer, "computer component not found. Has it been imported?")
-  print(
-    "[debug] energy: " ..
-      computer.energy() ..
-        " / " .. computer.maxEnergy() .. " [" .. (computer.energy() / computer.maxEnergy()) * 100 .. "%]"
-  )
   return computer.energy() / computer.maxEnergy()
 end
 
@@ -43,7 +41,7 @@ end
 
 local function chime()
   if not config.MUTE then
-    computer.beep("--.-...--")
+    computer.beep(".--.-...--")
   end
 end
 
@@ -60,12 +58,23 @@ local function turn_until_unblocked(turn_callback)
   end
 end
 
+local function navigate_to_waypoint(target)
+  local x, y, z, err = navigation.getPosition()
+  if err then
+    print(err)
+  end
+  local waypoint = navigation.findWaypoints(navigation.getRange())[1]
+  print("robot: " .. x .. "," .. y .. "," .. z)
+
+  local dx, dy, dz = (x - waypoint.position[1]), (y - waypoint.position[2]), (z - waypoint.position[3])
+  print("dx: " .. dx .. "," .. dy .. "," .. dz)
+end
+
 -- main loop
 
 local function run()
   while true do
-    local will_collide, obstacle = robot.detect()
-    print("[debug] type: " .. obstacle) -- TODO: remove
+    local will_collide, _ = robot.detect()
     if will_collide then -- TODO: investigate passable blocks (pressure plates/doors etc?)
       choose_and_execute(
         function()
@@ -79,9 +88,10 @@ local function run()
       -- if power is low, seek charging station. otherwise, perform standard behaviour
       if config.RECHARGE and get_power_level() < config.CRITICAL_POWER_LEVEL then
         -- TODO: Seek power supply (use waypoint + charging station?)
-        print("[debug] Power is critically low, seeking recharge!!")
+
+        navigate_to_waypoint("charger")
       else
-        chance_to_act(0.15, randomly_turn)
+        chance_to_act(0.05, randomly_turn)
         chance_to_act(0.025, chime)
         chance_to_act(0.65, robot.forward)
       end
@@ -89,6 +99,8 @@ local function run()
   end
 end
 
-os.execute("clear")
+if not config.DEBUG then
+  os.execute("clear")
+end
 print("watch me run dad!")
 run()
